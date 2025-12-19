@@ -3,3 +3,4 @@ outputs/
 runs/
 .venv/
 yolov8n.pt
+models/
