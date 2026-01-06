@@ -4,3 +4,4 @@ runs/
 .venv/
 yolov8n.pt
 models/
+venv/

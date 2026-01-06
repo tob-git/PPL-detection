@@ -5,7 +5,7 @@ from pathlib import Path
 
 # ---- Config ----
 MODEL_PATH = "models/ppe_yolov8.onnx"   # change if needed
-IMAGE_PATH = "/Users/mohamdtobgi/Fall26/intro to ml/PPL detection/datasets/images/test/image6.jpeg"              # change to any image
+IMAGE_PATH = "/Users/mohamdtobgi/Fall26/intro to ml/PPL detection/outputs/label_vis_train/image440.jpg"              # change to any image
 IMG_SIZE = 640
 CONF_THRES = 0.25
 IOU_THRES = 0.50
