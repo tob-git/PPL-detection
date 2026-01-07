@@ -33,7 +33,7 @@ def load_models():
     feature_methods = ['original', 'kbest', 'pca', 'rfe']
     
     # Classifier names
-    classifier_names = ['Decision Tree', 'Random Forest', 'XGBoost', 'KNN', 'SVM', 'ANN (MLP)']
+    classifier_names = ['Decision Tree', 'Random Forest', 'XGBoost', 'KNN', 'SVM', 'ANN (MLP)', 'Extra Trees', 'Gradient Boost']
     
     # Load all model combinations
     for clf_name in classifier_names:
@@ -324,14 +324,14 @@ def main():
         options=['original', 'kbest', 'pca', 'rfe'],
         format_func=lambda x: {
             'original': 'Original (All Features - 2361)',
-            'kbest': 'SelectKBest (Top 100)',
-            'pca': 'PCA (100 Components)',
-            'rfe': 'RFE (80 Features)'
+            'kbest': 'SelectKBest (Top 200)',
+            'pca': 'PCA (150 Components)',
+            'rfe': 'RFE (150 Features)'
         }[x]
     )
     
     # Classifier dropdown
-    classifier_names = ['Decision Tree', 'Random Forest', 'XGBoost', 'KNN', 'SVM', 'ANN (MLP)', 'YOLO']
+    classifier_names = ['Decision Tree', 'Random Forest', 'XGBoost', 'KNN', 'SVM', 'ANN (MLP)', 'Extra Trees', 'Gradient Boost', 'YOLO']
     selected_classifier = st.sidebar.selectbox("Classifier", classifier_names)
     
     # Construct full model key

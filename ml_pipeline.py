@@ -39,8 +39,13 @@ from sklearn.metrics import (
 )
 
 # For class balancing
-from imblearn.over_sampling import SMOTE
+from imblearn.over_sampling import SMOTE, BorderlineSMOTE, ADASYN
+from imblearn.combine import SMOTETomek
 from imblearn.pipeline import Pipeline as ImbPipeline
+
+# Additional ensemble methods
+from sklearn.ensemble import AdaBoostClassifier, ExtraTreesClassifier, StackingClassifier
+from sklearn.linear_model import LogisticRegression
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -81,24 +86,49 @@ def extract_roi_from_bbox(img, bbox_normalized):
     return roi if roi.size > 0 else None
 
 def augment_roi(roi):
-    """Apply data augmentation to ROI."""
+    """Apply aggressive data augmentation to ROI."""
     augmented = [roi]
     
     # Horizontal flip
     augmented.append(cv2.flip(roi, 1))
     
-    # Brightness variations
-    bright = cv2.convertScaleAbs(roi, alpha=1.2, beta=20)
-    dark = cv2.convertScaleAbs(roi, alpha=0.8, beta=-20)
-    augmented.extend([bright, dark])
+    # Brightness variations (more aggressive)
+    for alpha, beta in [(1.3, 30), (1.1, 15), (0.9, -15), (0.7, -30)]:
+        adjusted = cv2.convertScaleAbs(roi, alpha=alpha, beta=beta)
+        augmented.append(adjusted)
     
-    # Rotation (slight)
+    # Rotation (more angles)
     h, w = roi.shape[:2]
     center = (w // 2, h // 2)
-    for angle in [-15, 15]:
+    for angle in [-20, -10, 10, 20]:
         M = cv2.getRotationMatrix2D(center, angle, 1.0)
         rotated = cv2.warpAffine(roi, M, (w, h))
         augmented.append(rotated)
+    
+    # Gaussian blur (slight)
+    blurred = cv2.GaussianBlur(roi, (3, 3), 0)
+    augmented.append(blurred)
+    
+    # Contrast adjustment
+    lab = cv2.cvtColor(roi, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4))
+    l = clahe.apply(l)
+    enhanced = cv2.merge([l, a, b])
+    enhanced = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
+    augmented.append(enhanced)
+    
+    # Add slight noise
+    noise = np.random.normal(0, 10, roi.shape).astype(np.uint8)
+    noisy = cv2.add(roi, noise)
+    augmented.append(noisy)
+    
+    # Scale variations
+    for scale in [0.9, 1.1]:
+        scaled = cv2.resize(roi, None, fx=scale, fy=scale)
+        # Resize back to original size
+        scaled = cv2.resize(scaled, (w, h))
+        augmented.append(scaled)
     
     return augmented
 
@@ -367,9 +397,9 @@ def main():
     print("I. DATASET PREPARATION (with augmentation)")
     print("="*70)
     
-    train_data = load_dataset_with_rois("train", max_samples_per_class=300, augment=True)
-    val_data = load_dataset_with_rois("val", max_samples_per_class=150, augment=False)
-    test_data = load_dataset_with_rois("test", max_samples_per_class=150, augment=False)
+    train_data = load_dataset_with_rois("train", max_samples_per_class=500, augment=True)
+    val_data = load_dataset_with_rois("val", max_samples_per_class=200, augment=False)
+    test_data = load_dataset_with_rois("test", max_samples_per_class=200, augment=False)
     
     # Combine train + val for training
     all_train = train_data + val_data
@@ -403,16 +433,23 @@ def main():
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
     
-    # Apply SMOTE for class balancing
-    print("\nApplying SMOTE for class balancing...")
+    # Apply advanced SMOTE for class balancing
+    print("\nApplying SMOTETomek for class balancing...")
     try:
-        smote = SMOTE(random_state=42, k_neighbors=3)
-        X_train_balanced, y_train_balanced = smote.fit_resample(X_train_scaled, y_train_encoded)
-        print(f"  Before SMOTE: {len(X_train_scaled)} samples")
-        print(f"  After SMOTE: {len(X_train_balanced)} samples")
+        # SMOTETomek combines oversampling with Tomek links cleaning
+        smote_tomek = SMOTETomek(random_state=42, smote=SMOTE(k_neighbors=5, random_state=42))
+        X_train_balanced, y_train_balanced = smote_tomek.fit_resample(X_train_scaled, y_train_encoded)
+        print(f"  Before SMOTETomek: {len(X_train_scaled)} samples")
+        print(f"  After SMOTETomek: {len(X_train_balanced)} samples")
     except Exception as e:
-        print(f"  SMOTE failed: {e}, using original data")
-        X_train_balanced, y_train_balanced = X_train_scaled, y_train_encoded
+        print(f"  SMOTETomek failed: {e}, trying regular SMOTE...")
+        try:
+            smote = SMOTE(random_state=42, k_neighbors=3)
+            X_train_balanced, y_train_balanced = smote.fit_resample(X_train_scaled, y_train_encoded)
+            print(f"  After SMOTE: {len(X_train_balanced)} samples")
+        except Exception as e2:
+            print(f"  SMOTE also failed: {e2}, using original data")
+            X_train_balanced, y_train_balanced = X_train_scaled, y_train_encoded
     
     # Feature Selection
     print("\n" + "="*70)
@@ -425,26 +462,26 @@ def main():
     feature_sets['original'] = (X_train_balanced, X_test_scaled, None)
     print(f"\n1. Original Features: {X_train_balanced.shape[1]}")
     
-    # SelectKBest
-    n_features_kbest = min(100, X_train_balanced.shape[1])
+    # SelectKBest - more features
+    n_features_kbest = min(200, X_train_balanced.shape[1])
     kbest = SelectKBest(f_classif, k=n_features_kbest)
     X_train_kbest = kbest.fit_transform(X_train_balanced, y_train_balanced)
     X_test_kbest = kbest.transform(X_test_scaled)
     feature_sets['kbest'] = (X_train_kbest, X_test_kbest, kbest)
     print(f"2. SelectKBest: {n_features_kbest} features")
     
-    # PCA
-    n_components = min(100, X_train_balanced.shape[1], X_train_balanced.shape[0])
+    # PCA - more components for better variance
+    n_components = min(150, X_train_balanced.shape[1], X_train_balanced.shape[0])
     pca = PCA(n_components=n_components, random_state=42)
     X_train_pca = pca.fit_transform(X_train_balanced)
     X_test_pca = pca.transform(X_test_scaled)
     feature_sets['pca'] = (X_train_pca, X_test_pca, pca)
     print(f"3. PCA: {n_components} components, {pca.explained_variance_ratio_.sum():.3f} variance")
     
-    # RFE
-    n_features_rfe = min(80, X_train_balanced.shape[1])
-    rf_for_rfe = RandomForestClassifier(n_estimators=50, random_state=42, n_jobs=-1)
-    rfe = RFE(estimator=rf_for_rfe, n_features_to_select=n_features_rfe, step=10)
+    # RFE - more features
+    n_features_rfe = min(150, X_train_balanced.shape[1])
+    rf_for_rfe = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+    rfe = RFE(estimator=rf_for_rfe, n_features_to_select=n_features_rfe, step=20)
     X_train_rfe = rfe.fit_transform(X_train_balanced, y_train_balanced)
     X_test_rfe = rfe.transform(X_test_scaled)
     feature_sets['rfe'] = (X_train_rfe, X_test_rfe, rfe)
@@ -456,53 +493,101 @@ def main():
     print("="*70)
     
     def get_classifiers():
-        """Get tuned classifiers."""
+        """Get highly tuned classifiers for best accuracy."""
+        
+        # Base classifiers for ensemble
+        rf_base = RandomForestClassifier(
+            n_estimators=300, random_state=42, n_jobs=-1,
+            max_depth=30, min_samples_split=2, class_weight='balanced'
+        )
+        xgb_base = XGBClassifier(
+            n_estimators=300, random_state=42, eval_metric='mlogloss',
+            max_depth=12, learning_rate=0.08, subsample=0.85, colsample_bytree=0.85
+        )
+        svm_base = SVC(
+            kernel='rbf', probability=True, random_state=42,
+            C=15, gamma='scale', class_weight='balanced'
+        )
+        
         return {
             'Decision Tree': DecisionTreeClassifier(
                 random_state=42, 
-                max_depth=20,
-                min_samples_split=5,
-                min_samples_leaf=2,
-                class_weight='balanced'
-            ),
-            'Random Forest': RandomForestClassifier(
-                n_estimators=200, 
-                random_state=42, 
-                n_jobs=-1,
                 max_depth=25,
                 min_samples_split=3,
-                class_weight='balanced'
+                min_samples_leaf=1,
+                class_weight='balanced',
+                criterion='entropy'
+            ),
+            'Random Forest': RandomForestClassifier(
+                n_estimators=400, 
+                random_state=42, 
+                n_jobs=-1,
+                max_depth=35,
+                min_samples_split=2,
+                min_samples_leaf=1,
+                class_weight='balanced',
+                criterion='entropy',
+                max_features='sqrt'
             ),
             'XGBoost': XGBClassifier(
-                n_estimators=200, 
+                n_estimators=400, 
                 random_state=42, 
                 eval_metric='mlogloss',
-                max_depth=10,
-                learning_rate=0.1,
-                subsample=0.8,
-                colsample_bytree=0.8
+                max_depth=15,
+                learning_rate=0.05,
+                subsample=0.9,
+                colsample_bytree=0.9,
+                min_child_weight=2,
+                reg_alpha=0.1,
+                reg_lambda=1.0
             ),
             'KNN': KNeighborsClassifier(
-                n_neighbors=7, 
+                n_neighbors=5, 
                 weights='distance',
-                metric='manhattan',
+                metric='minkowski',
+                p=1,
                 n_jobs=-1
             ),
             'SVM': SVC(
                 kernel='rbf', 
                 probability=True, 
                 random_state=42,
-                C=10,
-                gamma='scale',
-                class_weight='balanced'
+                C=20,
+                gamma='auto',
+                class_weight='balanced',
+                decision_function_shape='ovr'
             ),
             'ANN (MLP)': MLPClassifier(
-                hidden_layer_sizes=(256, 128, 64), 
-                max_iter=1000, 
+                hidden_layer_sizes=(512, 256, 128, 64), 
+                max_iter=1500, 
                 random_state=42,
                 early_stopping=True,
-                validation_fraction=0.1,
-                learning_rate='adaptive'
+                validation_fraction=0.15,
+                learning_rate='adaptive',
+                learning_rate_init=0.001,
+                alpha=0.0001,
+                batch_size='auto',
+                solver='adam',
+                activation='relu'
+            ),
+            # Extra Trees (often better than Random Forest)
+            'Extra Trees': ExtraTreesClassifier(
+                n_estimators=400,
+                random_state=42,
+                n_jobs=-1,
+                max_depth=35,
+                min_samples_split=2,
+                class_weight='balanced',
+                criterion='entropy'
+            ),
+            # Gradient Boosting
+            'Gradient Boost': GradientBoostingClassifier(
+                n_estimators=300,
+                random_state=42,
+                max_depth=10,
+                learning_rate=0.1,
+                subsample=0.8,
+                min_samples_split=3
             )
         }
     
