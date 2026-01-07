@@ -3,6 +3,13 @@ PPE Detection App - YOLO Detection + ML Classification
 Combines YOLO object detection with traditional ML classifiers
 """
 
+import os
+import warnings
+warnings.filterwarnings('ignore')
+
+# Set environment variables before importing ultralytics
+os.environ['YOLO_CONFIG_DIR'] = '/tmp/Ultralytics'
+
 import streamlit as st
 import cv2
 import numpy as np
@@ -392,74 +399,84 @@ def main():
     uploaded_file = st.file_uploader("Upload Image", type=['png', 'jpg', 'jpeg'])
     
     if uploaded_file:
-        image = Image.open(uploaded_file)
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("📷 Original")
-            st.image(image, use_container_width=True)
-        
-        with st.spinner(f"Processing with {selected_classifier} ({feature_method if not use_yolo else 'N/A'})..."):
-            # Get feature selector based on selected method
-            feature_selector = selectors.get(feature_method, None) if not use_yolo else None
+        try:
+            st.write("Debug: File uploaded successfully")
+            image = Image.open(uploaded_file)
+            st.write(f"Debug: Image opened, size: {image.size}")
             
-            # Debug info
-            if not use_yolo:
-                st.sidebar.write(f"🔍 Using: {selected_classifier} with {feature_method} features")
-                st.sidebar.write(f"🔍 Selector: {type(feature_selector).__name__ if feature_selector else 'None (original features)'}")
+            col1, col2 = st.columns(2)
             
-            # Check if model exists
-            if selected_model not in models:
-                st.error(f"Model '{selected_model}' not found! Run ml_pipeline.py first.")
-                return
+            with col1:
+                st.subheader("📷 Original")
+                st.image(image, use_container_width=True)
             
-            result_img, detections = detect_and_classify(
-                image, 
-                models[selected_model] if not use_yolo else None,
-                feature_selector,
-                scaler, 
-                label_encoder, 
-                yolo_model, 
-                conf_threshold,
-                use_yolo_class=use_yolo
-            )
+            with st.spinner(f"Processing with {selected_classifier} ({feature_method if not use_yolo else 'N/A'})..."):
+                # Get feature selector based on selected method
+                feature_selector = selectors.get(feature_method, None) if not use_yolo else None
+                
+                # Debug info
+                if not use_yolo:
+                    st.sidebar.write(f"🔍 Using: {selected_classifier} with {feature_method} features")
+                    st.sidebar.write(f"🔍 Selector: {type(feature_selector).__name__ if feature_selector else 'None (original features)'}")
+                
+                # Check if model exists
+                if selected_model not in models:
+                    st.error(f"Model '{selected_model}' not found! Run ml_pipeline.py first.")
+                    st.stop()
+                
+                st.write(f"Debug: About to call detect_and_classify")
+                result_img, detections = detect_and_classify(
+                    image, 
+                    models[selected_model] if not use_yolo else None,
+                    feature_selector,
+                    scaler, 
+                    label_encoder, 
+                    yolo_model, 
+                    conf_threshold,
+                    use_yolo_class=use_yolo
+                )
+                st.write(f"Debug: detect_and_classify completed. Found {len(detections)} detections")
+                
+                with col2:
+                    st.subheader(f"🔍 Results ({selected_model})")
+                    st.image(result_img, use_container_width=True)
             
-            with col2:
-                st.subheader(f"🔍 Results ({selected_model})")
-                st.image(result_img, use_container_width=True)
-        
-        # Stats
-        st.markdown("---")
-        if detections:
-            cols = st.columns(4)
-            
-            with cols[0]:
-                st.metric("Total Detections", len(detections))
-            
-            class_counts = {}
-            for d in detections:
-                class_counts[d['class']] = class_counts.get(d['class'], 0) + 1
-            
-            safe = sum(class_counts.get(c, 0) for c in ['helmet', 'gloves', 'vest', 'boots', 'goggles'])
-            unsafe = sum(class_counts.get(c, 0) for c in ['no_helmet', 'no_goggle', 'no_gloves', 'no_boots'])
-            
-            with cols[1]:
-                st.metric("✅ Safe PPE", safe)
-            with cols[2]:
-                st.metric("⚠️ Missing PPE", unsafe, delta=f"-{unsafe}" if unsafe > 0 else None, delta_color="inverse")
-            with cols[3]:
-                safety_score = (safe / (safe + unsafe) * 100) if (safe + unsafe) > 0 else 0
-                st.metric("Safety Score", f"{safety_score:.0f}%")
-            
-            # Table
-            st.subheader("📊 Detected Objects")
-            import pandas as pd
-            df = pd.DataFrame(detections)
-            df['confidence'] = df['confidence'].apply(lambda x: f"{x:.1%}")
-            df = df[['class', 'confidence']]
-            st.dataframe(df, use_container_width=True)
-        else:
-            st.warning("No objects detected")
+            # Stats
+            st.markdown("---")
+            if detections:
+                cols = st.columns(4)
+                
+                with cols[0]:
+                    st.metric("Total Detections", len(detections))
+                
+                class_counts = {}
+                for d in detections:
+                    class_counts[d['class']] = class_counts.get(d['class'], 0) + 1
+                
+                safe = sum(class_counts.get(c, 0) for c in ['helmet', 'gloves', 'vest', 'boots', 'goggles'])
+                unsafe = sum(class_counts.get(c, 0) for c in ['no_helmet', 'no_goggle', 'no_gloves', 'no_boots'])
+                
+                with cols[1]:
+                    st.metric("✅ Safe PPE", safe)
+                with cols[2]:
+                    st.metric("⚠️ Missing PPE", unsafe, delta=f"-{unsafe}" if unsafe > 0 else None, delta_color="inverse")
+                with cols[3]:
+                    safety_score = (safe / (safe + unsafe) * 100) if (safe + unsafe) > 0 else 0
+                    st.metric("Safety Score", f"{safety_score:.0f}%")
+                
+                # Table
+                st.subheader("📊 Detected Objects")
+                import pandas as pd
+                df = pd.DataFrame(detections)
+                df['confidence'] = df['confidence'].apply(lambda x: f"{x:.1%}")
+                df = df[['class', 'confidence']]
+                st.dataframe(df, use_container_width=True)
+            else:
+                st.warning("No objects detected")
+        except Exception as e:
+            st.error(f"❌ Error processing image: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())
     else:
         st.info("👆 Upload an image to start!")
 
