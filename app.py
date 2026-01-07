@@ -29,6 +29,12 @@ def load_models():
     """Load all models and feature selectors."""
     models = {}
     
+    # Check if output directory exists
+    if not OUTPUT_DIR.exists():
+        st.error(f"Output directory not found: {OUTPUT_DIR}")
+        st.info("Please ensure the models directory is properly deployed.")
+        return {}, {}, None, None, None
+    
     # Feature methods available
     feature_methods = ['original', 'kbest', 'pca', 'rfe']
     
@@ -42,9 +48,12 @@ def load_models():
             model_key = f"{clf_name} ({feat_method})"
             model_path = OUTPUT_DIR / f"{safe_clf}_model_{feat_method}.pkl"
             if model_path.exists():
-                with open(model_path, 'rb') as f:
-                    models[model_key] = pickle.load(f)
-                    print(f"Loaded model: {model_key}")
+                try:
+                    with open(model_path, 'rb') as f:
+                        models[model_key] = pickle.load(f)
+                        print(f"Loaded model: {model_key}")
+                except Exception as e:
+                    print(f"Error loading {model_key}: {e}")
             else:
                 print(f"Model not found: {model_path}")
     
@@ -56,18 +65,33 @@ def load_models():
     for feat_method in ['kbest', 'pca', 'rfe']:
         selector_path = OUTPUT_DIR / f"selector_{feat_method}.pkl"
         if selector_path.exists():
-            with open(selector_path, 'rb') as f:
-                selectors[feat_method] = pickle.load(f)
-                print(f"Loaded selector: {feat_method}")
+            try:
+                with open(selector_path, 'rb') as f:
+                    selectors[feat_method] = pickle.load(f)
+                    print(f"Loaded selector: {feat_method}")
+            except Exception as e:
+                print(f"Error loading selector {feat_method}: {e}")
+                selectors[feat_method] = None
         else:
             print(f"Warning: Selector not found: {selector_path}")
             selectors[feat_method] = None
     
     # Load scaler and label encoder
-    with open(OUTPUT_DIR / 'scaler.pkl', 'rb') as f:
-        scaler = pickle.load(f)
-    with open(OUTPUT_DIR / 'label_encoder.pkl', 'rb') as f:
-        label_encoder = pickle.load(f)
+    try:
+        scaler_path = OUTPUT_DIR / 'scaler.pkl'
+        encoder_path = OUTPUT_DIR / 'label_encoder.pkl'
+        
+        if not scaler_path.exists() or not encoder_path.exists():
+            st.error("Required files (scaler.pkl or label_encoder.pkl) not found")
+            return models, selectors, None, None, None
+            
+        with open(scaler_path, 'rb') as f:
+            scaler = pickle.load(f)
+        with open(encoder_path, 'rb') as f:
+            label_encoder = pickle.load(f)
+    except Exception as e:
+        st.error(f"Error loading scaler or encoder: {e}")
+        return models, selectors, None, None, None
     
     yolo_model = YOLO(str(YOLO_MODEL_PATH)) if YOLO_MODEL_PATH.exists() else None
     
