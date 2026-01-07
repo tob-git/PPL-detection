@@ -1,3 +1,14 @@
+---
+title: PPE Detection
+emoji: 🦺
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 8501
+pinned: false
+license: mit
+---
+
 # PPE Detection - Complete Machine Learning Pipeline
 
 This project implements a comprehensive Personal Protective Equipment (PPE) detection system using both deep learning (YOLO) and traditional machine learning approaches.
