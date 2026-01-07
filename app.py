@@ -249,72 +249,92 @@ def extract_all_features(roi, target_size=(64, 64)):
 
 def detect_and_classify(image, classifier, feature_selector, scaler, label_encoder, yolo_model, conf_threshold=0.25, use_yolo_class=False):
     """Detect with YOLO and classify with ML model or YOLO."""
-    img = np.array(image)
-    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-    img_display = img.copy()
-    detections = []
-    
-    # YOLO class names mapping
-    yolo_class_names = {
-        0: "helmet", 1: "gloves", 2: "vest", 3: "boots", 4: "goggles",
-        5: "none", 6: "Person", 7: "no_helmet", 8: "no_goggle",
-        9: "no_gloves", 10: "no_boots"
-    }
-    
-    if yolo_model:
-        results = yolo_model(img, conf=conf_threshold, verbose=False)
+    try:
+        img = np.array(image)
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        img_display = img.copy()
+        detections = []
         
-        for result in results:
-            for box in result.boxes:
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                roi = img[y1:y2, x1:x2]
-                
-                if roi.size > 0 and roi.shape[0] > 20 and roi.shape[1] > 20:
-                    # Determine class and confidence
-                    if use_yolo_class:
-                        # Use YOLO's prediction
-                        yolo_cls = int(box.cls[0])
-                        pred_class = yolo_class_names.get(yolo_cls, f"class_{yolo_cls}")
-                        pred_conf = float(box.conf[0])
-                    else:
-                        # Use ML classifier with feature selection
-                        features = extract_all_features(roi)
-                        features_scaled = scaler.transform(features.reshape(1, -1))
-                        
-                        # Apply feature selection if provided
-                        if feature_selector is not None:
-                            features_scaled = feature_selector.transform(features_scaled)
-                        
-                        # Debug: print feature dimensions
-                        print(f"Features shape after selection: {features_scaled.shape}")
-                        
-                        pred_encoded = classifier.predict(features_scaled)[0]
-                        pred_class = label_encoder.inverse_transform([pred_encoded])[0]
-                        
-                        if hasattr(classifier, 'predict_proba'):
-                            proba = classifier.predict_proba(features_scaled)[0]
-                            pred_conf = float(proba[pred_encoded])
-                        else:
-                            pred_conf = float(box.conf[0])
-                    
-                    detections.append({
-                        'box': (x1, y1, x2, y2),
-                        'class': pred_class,
-                        'confidence': pred_conf
-                    })
-                    
-                    # Draw
-                    color = CLASS_COLORS.get(pred_class, (255, 255, 255))
-                    cv2.rectangle(img_display, (x1, y1), (x2, y2), color, 3)
-                    
-                    label = f"{pred_class}: {pred_conf:.2f}"
-                    (label_w, label_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
-                    cv2.rectangle(img_display, (x1, y1 - label_h - 10), (x1 + label_w, y1), color, -1)
-                    cv2.putText(img_display, label, (x1, y1 - 5),
-                              cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        # YOLO class names mapping
+        yolo_class_names = {
+            0: "helmet", 1: "gloves", 2: "vest", 3: "boots", 4: "goggles",
+            5: "none", 6: "Person", 7: "no_helmet", 8: "no_goggle",
+            9: "no_gloves", 10: "no_boots"
+        }
+        
+        if yolo_model is None:
+            st.error("YOLO model not loaded")
+            return img_display, detections
+    except Exception as e:
+        st.error(f"Error initializing detection: {e}")
+        import traceback
+        st.code(traceback.format_exc())
+        return np.array(image), []
     
-    img_display = cv2.cvtColor(img_display, cv2.COLOR_BGR2RGB)
-    return img_display, detections
+    try:
+        if yolo_model:
+            results = yolo_model(img, conf=conf_threshold, verbose=False)
+            
+            for result in results:
+                for box in result.boxes:
+                    try:
+                        x1, y1, x2, y2 = map(int, box.xyxy[0])
+                        roi = img[y1:y2, x1:x2]
+                        
+                        if roi.size > 0 and roi.shape[0] > 20 and roi.shape[1] > 20:
+                            # Determine class and confidence
+                            if use_yolo_class:
+                                # Use YOLO's prediction
+                                yolo_cls = int(box.cls[0])
+                                pred_class = yolo_class_names.get(yolo_cls, f"class_{yolo_cls}")
+                                pred_conf = float(box.conf[0])
+                            else:
+                                # Use ML classifier with feature selection
+                                features = extract_all_features(roi)
+                                features_scaled = scaler.transform(features.reshape(1, -1))
+                                
+                                # Apply feature selection if provided
+                                if feature_selector is not None:
+                                    features_scaled = feature_selector.transform(features_scaled)
+                                
+                                # Debug: print feature dimensions
+                                print(f"Features shape after selection: {features_scaled.shape}")
+                                
+                                pred_encoded = classifier.predict(features_scaled)[0]
+                                pred_class = label_encoder.inverse_transform([pred_encoded])[0]
+                                
+                                if hasattr(classifier, 'predict_proba'):
+                                    proba = classifier.predict_proba(features_scaled)[0]
+                                    pred_conf = float(proba[pred_encoded])
+                                else:
+                                    pred_conf = float(box.conf[0])
+                            
+                            detections.append({
+                                'box': (x1, y1, x2, y2),
+                                'class': pred_class,
+                                'confidence': pred_conf
+                            })
+                            
+                            # Draw
+                            color = CLASS_COLORS.get(pred_class, (255, 255, 255))
+                            cv2.rectangle(img_display, (x1, y1), (x2, y2), color, 3)
+                            
+                            label = f"{pred_class}: {pred_conf:.2f}"
+                            (label_w, label_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+                            cv2.rectangle(img_display, (x1, y1 - label_h - 10), (x1 + label_w, y1), color, -1)
+                            cv2.putText(img_display, label, (x1, y1 - 5),
+                                      cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                    except Exception as e:
+                        st.warning(f"Error processing detection box: {e}")
+                        continue
+        
+        img_display = cv2.cvtColor(img_display, cv2.COLOR_BGR2RGB)
+        return img_display, detections
+    except Exception as e:
+        st.error(f"Error during detection: {e}")
+        import traceback
+        st.code(traceback.format_exc())
+        return np.array(image), []
 
 def main():
     st.set_page_config(page_title="PPE Detection", page_icon="🦺", layout="wide")
