@@ -15,20 +15,23 @@ This project implements a comprehensive Personal Protective Equipment (PPE) dete
 
 ## 🚀 Quick Start
 
-Get up and running in 3 steps:
+Get up and running in 3 simple steps - **no training required!** The repository includes pre-trained models.
 
 ```bash
-# 1. Install dependencies
-pip install -r requirements.txt
+# 1. Clone the repository (includes pre-trained models)
+git clone https://github.com/tob-git/PPL-detection.git
+cd PPL-detection
 
-# 2. Train models (downloads dataset automatically)
-python ml_pipeline.py
+# 2. Install dependencies
+pip install -r requirements.txt
 
 # 3. Launch the web UI
 streamlit run app.py
 ```
 
-Then open your browser to `http://localhost:8501` and start detecting PPE!
+Then open your browser to `http://localhost:8501` and start detecting PPE immediately!
+
+**Note**: The repository includes pre-trained models in the `models/` directory, so you can skip the training step and start using the application right away.
 
 ## Project Overview
 
