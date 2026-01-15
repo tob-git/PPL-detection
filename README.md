@@ -13,6 +13,23 @@ license: mit
 
 This project implements a comprehensive Personal Protective Equipment (PPE) detection system using both deep learning (YOLO) and traditional machine learning approaches.
 
+## 🚀 Quick Start
+
+Get up and running in 3 steps:
+
+```bash
+# 1. Install dependencies
+pip install -r requirements.txt
+
+# 2. Train models (downloads dataset automatically)
+python ml_pipeline.py
+
+# 3. Launch the web UI
+streamlit run app.py
+```
+
+Then open your browser to `http://localhost:8501` and start detecting PPE!
+
 ## Project Overview
 
 The project meets all required machine learning pipeline components:
@@ -89,11 +106,19 @@ PPL detection/
     └── label_vis_val/
 ```
 
-## Installation
+## Installation & Setup
 
-1. **Clone the repository** (if applicable) or navigate to the project directory
+### 1. Clone the Repository (if applicable)
 
-2. **Create a virtual environment** (recommended):
+```bash
+git clone https://github.com/tob-git/PPL-detection.git
+cd PPL-detection
+```
+
+Or navigate to your project directory.
+
+### 2. Create a Virtual Environment (Recommended)
+
 ```bash
 python -m venv venv
 source venv/bin/activate  # On macOS/Linux
@@ -101,14 +126,90 @@ source venv/bin/activate  # On macOS/Linux
 venv\Scripts\activate  # On Windows
 ```
 
-3. **Install dependencies**:
+### 3. Install Dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
+### 4. Download the Dataset
+
+The Construction-PPE dataset needs to be downloaded before training. You have two options:
+
+#### Option A: Automatic Download (Recommended)
+
+The dataset will be automatically downloaded when you first run the training script:
+
+```bash
+python ppe.py
+```
+
+The YOLOv8 training script will:
+- Automatically download the dataset from the official source
+- Extract it to `datasets/construction-ppe/`
+- Organize images into train/val/test splits
+
+#### Option B: Manual Download
+
+If you prefer to download manually:
+
+1. Download the dataset:
+   ```bash
+   wget https://github.com/ultralytics/assets/releases/download/v0.0.0/construction-ppe.zip
+   ```
+
+2. Extract to the correct location:
+   ```bash
+   unzip construction-ppe.zip -d datasets/
+   ```
+
+3. Verify the structure:
+   ```
+   datasets/construction-ppe/
+   ├── images/
+   │   ├── train/  (1,132 images)
+   │   ├── val/    (143 images)
+   │   └── test/   (141 images)
+   └── labels/
+       ├── train/
+       ├── val/
+       └── test/
+   ```
+
+**Dataset Details:**
+- **Size**: 178.4 MB
+- **Total Images**: 1,416 images
+- **Classes**: 11 PPE-related classes
+- **Source**: Ultralytics Construction-PPE dataset
+- **License**: Check LICENSE file in dataset directory
+
 ## Usage
 
-### Option 1: Traditional ML Pipeline (All Requirements) ⭐
+### Option 1: Interactive Web UI (Easiest) 🌐
+
+Launch the Streamlit web interface for easy image upload and real-time predictions:
+
+```bash
+streamlit run app.py
+```
+
+This will:
+- Open a web browser at `http://localhost:8501`
+- Provide a user-friendly interface for uploading images
+- Allow you to choose between YOLO or Traditional ML models
+- Display predictions with visual annotations
+- Compare different classifiers side-by-side
+
+**UI Features:**
+- ✅ Drag-and-drop image upload
+- ✅ Real-time YOLO object detection with bounding boxes
+- ✅ Traditional ML classification with 6+ classifiers
+- ✅ Confidence scores and safety assessments
+- ✅ Color-coded results (green = safe, red = unsafe)
+
+**Note**: You must train models first (see Option 2 or 3) before using the UI.
+
+### Option 2: Traditional ML Pipeline (All Requirements) ⭐
 
 Run the complete ML pipeline with feature extraction, selection, and multiple classifiers:
 
@@ -123,10 +224,11 @@ This will:
 4. ✅ Train 6 different classifiers (Decision Tree, RF, XGBoost, KNN, SVM, ANN)
 5. ✅ Evaluate with accuracy, precision, recall, F1-score, and confusion matrices
 6. ✅ Generate comprehensive visualizations and comparison plots
+7. ✅ Save trained models for use in the UI
 
 **Output**: All results saved to `outputs/ml_pipeline/`
 
-### Option 2: YOLO Deep Learning Approach
+### Option 3: YOLO Deep Learning Approach
 
 Run the YOLO-based detection pipeline:
 
@@ -135,17 +237,25 @@ python ppe.py
 ```
 
 This will:
+- Download dataset (if not already present)
 - Analyze dataset statistics
 - Generate label visualizations
 - Train YOLOv8 model
 - Validate and predict on test images
+- Save trained model to `models/ppe_yolov8.pt`
 
-### Option 3: Run Inference Only
+### Option 4: Run Inference Only
 
 For quick inference with trained YOLO model:
 
 ```bash
 python infer.py
+```
+
+Or for ONNX format:
+
+```bash
+python inferonnx.py
 ```
 
 ## Results
@@ -223,21 +333,139 @@ Best F1-Score:
 
 ## Troubleshooting
 
+### Dataset Download Issues
+
+**Problem**: Dataset download fails or times out
+
+**Solution**:
+```bash
+# Try manual download
+wget https://github.com/ultralytics/assets/releases/download/v0.0.0/construction-ppe.zip
+unzip construction-ppe.zip -d datasets/
+```
+
+Or use curl:
+```bash
+curl -L https://github.com/ultralytics/assets/releases/download/v0.0.0/construction-ppe.zip -o construction-ppe.zip
+unzip construction-ppe.zip -d datasets/
+```
+
+### UI Not Loading / "YOLO model not found"
+
+**Problem**: UI shows "model not found" error
+
+**Solution**: Train the models first:
+```bash
+# Train YOLO model
+python ppe.py
+
+# Train traditional ML models
+python ml_pipeline.py
+```
+
+### UI Port Already in Use
+
+**Problem**: Port 8501 is already in use
+
+**Solution**: Specify a different port:
+```bash
+streamlit run app.py --server.port 8502
+```
+
 ### Out of Memory
+
 If you encounter memory issues:
 - Reduce image size in `extract_all_features()` (default: 128x128)
 - Process fewer images for testing
 - Use feature selection methods that reduce dimensionality more
 
 ### Slow Training
+
 - SVM and ANN can be slow on large datasets
 - Start with Random Forest or XGBoost for faster results
 - Use cached features (`.pkl` files) for subsequent runs
 
 ### Missing Dependencies
+
 ```bash
 pip install --upgrade -r requirements.txt
 ```
+
+### Streamlit Not Found
+
+If `streamlit run app.py` fails:
+```bash
+pip install streamlit
+# or
+pip install --upgrade streamlit
+```
+
+## Using the Web UI
+
+After launching the UI with `streamlit run app.py`:
+
+### 1. Upload an Image
+- Click "Browse files" or drag and drop an image
+- Supported formats: JPG, JPEG, PNG
+- Best results with clear images showing workers and PPE
+
+### 2. Choose Detection Mode
+
+**YOLO Object Detection:**
+- Detects and localizes multiple PPE items in the image
+- Shows bounding boxes around detected objects
+- Provides confidence scores for each detection
+- Best for: Images with multiple workers/objects
+- Detects: Helmets, gloves, vests, boots, goggles (safe and unsafe)
+
+**Traditional ML Classification:**
+- Classifies entire image for overall safety assessment
+- Choose from 6+ different classifiers:
+  - **Random Forest**: Ensemble method, usually best accuracy
+  - **XGBoost**: Gradient boosting, fast and accurate
+  - **SVM**: Support Vector Machine, good for complex boundaries
+  - **Decision Tree**: Simple, interpretable
+  - **KNN**: Instance-based learning
+  - **ANN (MLP)**: Neural network approach
+- Best for: Overall safety compliance checking
+
+### 3. View Results
+
+**YOLO Results:**
+- Annotated image with color-coded bounding boxes:
+  - 🟢 Green: Safe PPE (helmet, gloves, vest, boots, goggles)
+  - 🔴 Red: Missing/unsafe PPE (no_helmet, no_gloves, etc.)
+  - 🟡 Yellow: Person detection
+- List of all detected items with confidence scores
+- Safety summary (compliant/non-compliant)
+
+**ML Classification Results:**
+- Safety assessment: "✅ Safe PPE" or "⚠️ Unsafe PPE"
+- Confidence score (0-100%)
+- Predicted class label
+- Feature importance (for tree-based models)
+
+### 4. Compare Models
+- Upload the same image multiple times
+- Try different classifiers
+- Compare accuracy and confidence
+- Choose the best model for your use case
+
+## Docker Deployment
+
+The project includes Docker support for easy deployment:
+
+```bash
+# Build the Docker image
+docker build -t ppe-detection .
+
+# Run the container
+docker run -p 8501:8501 ppe-detection
+```
+
+Access the UI at `http://localhost:8501`
+
+**Note**: The Docker configuration is optimized for Hugging Face Spaces deployment.
 
 ## Extensions and Improvements
 
